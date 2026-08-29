@@ -4,7 +4,10 @@ __pycache__/
 *.pyc
 warehouse/*.duckdb
 dbt_project/target/
+dbt_project/.user.yml
 dbt_project/logs/
 dbt_project/dbt_packages/
 .streamlit/
 .DS_Store
+reports/latest_metrics.json
+reports/slo_events.csv
