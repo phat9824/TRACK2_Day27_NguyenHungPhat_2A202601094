@@ -2,11 +2,25 @@ version: 2
 
 models:
   - name: fct_daily_revenue
-    description: Daily completed-order revenue for the CEO dashboard.
+    description: >
+      Daily completed-order revenue for the CEO dashboard. One row per calendar
+      day; the customer join is deduplicated to one active version per customer,
+      so the grain cannot be inflated by an SCD dimension.
     columns:
       - name: order_date
+        description: Calendar day of the completed orders. Primary key of this mart.
         data_tests:
           - not_null
+          # The grain of the mart. If a fan-out or a bad group-by ever produced two
+          # rows for one day, the dashboard would silently double-count that day.
+          - unique
+      - name: completed_order_rows
+        description: Number of completed order rows contributing to the day.
+        data_tests:
+          - not_null
+          - non_negative
       - name: daily_revenue
+        description: Sum of completed order amounts in USD.
         data_tests:
           - not_null
+          - non_negative

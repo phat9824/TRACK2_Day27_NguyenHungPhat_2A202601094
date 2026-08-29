@@ -11,6 +11,16 @@ models:
       - name: customer_id
         data_tests:
           - not_null
+          # Every order must resolve to a customer. An orphan order silently
+          # disappears from any inner join built on this model later.
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: amount_usd
+        data_tests:
+          - not_null
+          - non_negative
       - name: currency
         data_tests:
           - accepted_values:
@@ -21,9 +31,17 @@ models:
           - accepted_values:
               arguments:
                 values: ['pending', 'completed', 'refunded', 'cancelled']
+      - name: order_date
+        data_tests:
+          - not_null
 
   - name: stg_customers
+    description: >
+      Slowly-changing customer dimension. `customer_id` is deliberately NOT
+      unique -- history is kept -- so the invariant worth testing is that only one
+      version of a customer is active at a time.
     columns:
       - name: customer_id
         data_tests:
           - not_null
+          - at_most_one_active_version

@@ -1,0 +1,79 @@
+# dbt unit tests: fixed input rows in, expected output rows out.
+#
+# Why these are not data tests: `not_null` and `unique` inspect whatever data
+# happens to be in the warehouse today, so they only fail once bad data has
+# already arrived. A unit test pins the *transformation logic* against inputs the
+# author chose, and fails at build time on a laptop -- before any data exists.
+
+unit_tests:
+  - name: completed_orders_sum_to_expected_revenue
+    description: Baseline arithmetic - two completed orders on one day sum to one row.
+    model: fct_daily_revenue
+    given:
+      - input: ref('stg_orders')
+        rows:
+          - {order_id: 1, customer_id: C0001, amount_usd: 100.0, status: completed, order_date: '2026-08-01'}
+          - {order_id: 2, customer_id: C0001, amount_usd: 70.0, status: completed, order_date: '2026-08-01'}
+      - input: ref('stg_customers')
+        rows:
+          - {customer_id: C0001, is_active: true, valid_from: '2026-01-01'}
+    expect:
+      rows:
+        - {order_date: '2026-08-01', completed_order_rows: 2, daily_revenue: 170.0}
+
+  - name: duplicate_active_customer_versions_do_not_inflate_revenue
+    description: >
+      The smallest input that exposes the revenue-inflation bug. C0001 has two
+      active SCD versions because the old one was never closed out. Against the
+      starter model this returns 2 rows and 200.0 revenue from a single 100.0
+      order; the mart must still report exactly one order worth 100.0.
+    model: fct_daily_revenue
+    given:
+      - input: ref('stg_orders')
+        rows:
+          - {order_id: 1, customer_id: C0001, amount_usd: 100.0, status: completed, order_date: '2026-08-01'}
+      - input: ref('stg_customers')
+        rows:
+          - {customer_id: C0001, is_active: true, valid_from: '2026-01-01'}
+          - {customer_id: C0001, is_active: true, valid_from: '2026-06-01'}
+    expect:
+      rows:
+        - {order_date: '2026-08-01', completed_order_rows: 1, daily_revenue: 100.0}
+
+  - name: only_completed_orders_reach_the_revenue_mart
+    description: >
+      Pending, refunded and cancelled orders must not be counted as revenue - the
+      status filter is business logic, and a rename upstream would silently
+      change what "revenue" means.
+    model: fct_daily_revenue
+    given:
+      - input: ref('stg_orders')
+        rows:
+          - {order_id: 1, customer_id: C0001, amount_usd: 100.0, status: completed, order_date: '2026-08-01'}
+          - {order_id: 2, customer_id: C0001, amount_usd: 500.0, status: pending, order_date: '2026-08-01'}
+          - {order_id: 3, customer_id: C0001, amount_usd: 900.0, status: refunded, order_date: '2026-08-01'}
+          - {order_id: 4, customer_id: C0001, amount_usd: 700.0, status: cancelled, order_date: '2026-08-01'}
+      - input: ref('stg_customers')
+        rows:
+          - {customer_id: C0001, is_active: true, valid_from: '2026-01-01'}
+    expect:
+      rows:
+        - {order_date: '2026-08-01', completed_order_rows: 1, daily_revenue: 100.0}
+
+  - name: orders_from_inactive_customers_still_count_as_revenue
+    description: >
+      The customer join is a left join on purpose: money received from a customer
+      who has since been deactivated is still revenue. This pins that decision so
+      a future "tidy-up" to an inner join fails loudly instead of quietly
+      shrinking the topline.
+    model: fct_daily_revenue
+    given:
+      - input: ref('stg_orders')
+        rows:
+          - {order_id: 1, customer_id: C0009, amount_usd: 250.0, status: completed, order_date: '2026-08-02'}
+      - input: ref('stg_customers')
+        rows:
+          - {customer_id: C0009, is_active: false, valid_from: '2026-01-01'}
+    expect:
+      rows:
+        - {order_date: '2026-08-02', completed_order_rows: 1, daily_revenue: 250.0}
