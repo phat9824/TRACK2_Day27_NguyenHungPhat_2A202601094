@@ -17,8 +17,21 @@ from observability.slo import calculate_slo, evaluate_multiwindow_burn
 from src.contract_validator import load_contract, validate_dataframe
 
 
-def validate_orders(df: pd.DataFrame, contract_path: str | Path) -> list[dict[str, Any]]:
-    return validate_dataframe(df, load_contract(contract_path))
+def validate_orders(
+    df: pd.DataFrame,
+    contract_path: str | Path,
+    *,
+    reference_time: Any = None,
+) -> list[dict[str, Any]]:
+    """Validate `df` against the contract at `contract_path`.
+
+    `reference_time` is optional and additive: callers that pass a clock get a
+    freshness verdict, callers that do not keep the original two-argument
+    behaviour. Freshness is skipped when no clock is available from either the
+    caller or the contract, so a historical fixture is never judged stale merely
+    because the suite ran on a later day.
+    """
+    return validate_dataframe(df, load_contract(contract_path), reference_time=reference_time)
 
 
 def detect_metric(
