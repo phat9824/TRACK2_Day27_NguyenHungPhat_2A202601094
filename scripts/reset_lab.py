@@ -59,6 +59,11 @@ def main() -> None:
     metrics = ROOT / "reports" / "latest_metrics.json"
     if metrics.exists():
         metrics.unlink()
+    # The burn-rate policy reads this run log; a stale one would carry a previous
+    # incident's error budget into a freshly reset lab.
+    slo_events = ROOT / "reports" / "slo_events.csv"
+    if slo_events.exists():
+        slo_events.unlink()
     print("Lab reset to a healthy baseline.")
 
 
